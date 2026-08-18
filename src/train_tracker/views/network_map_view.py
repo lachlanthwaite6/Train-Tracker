@@ -14,8 +14,10 @@ from train_tracker.map.interpolation import scheduled_markers
 from train_tracker.map.models import MapScene, MapScope, Point, RailRoute, TrainPositionSource
 from train_tracker.map.projection import MapViewport
 from train_tracker.map.renderer import MapRenderOptions, NetworkMapRenderer, hit_test
+from train_tracker.map.system import resolve_system_marker_overlaps, system_viewport
 
 SCOPE_LABELS = {
+    MapScope.SYSTEM: "System View",
     MapScope.FOCUSED: "Route Focus",
     MapScope.CBD: "Central Corridor",
     MapScope.FULL: "Full Network",
@@ -37,6 +39,7 @@ class NetworkMapView:
         set_scope: Callable[[str], None],
         set_routes: Callable[[tuple[str, ...]], None],
         set_direction: Callable[[str], None],
+        record_gif: Callable[[], None],
     ) -> None:
         import tkinter as tk
         from tkinter import ttk
@@ -46,6 +49,7 @@ class NetworkMapView:
         self.config = config
         self.routes = routes
         self.set_routes_callback = set_routes
+        self.set_scope_callback = set_scope
         self.now = now
         self.refresh_callback = refresh
         self.renderer = NetworkMapRenderer()
@@ -65,6 +69,8 @@ class NetworkMapView:
         self.display_scale = 1
         self.display_offset = (0, 0)
         self.labels_var = tk.BooleanVar(value=config.show_station_labels)
+        self.minor_labels_var = tk.BooleanVar(value=config.show_minor_station_labels)
+        self.all_stations_var = tk.BooleanVar(value=False)
         self.trains_var = tk.BooleanVar(value=True)
         self.estimates_var = tk.BooleanVar(value=config.show_scheduled_estimates)
         self.led_preview_var = tk.BooleanVar(value=True)
@@ -75,7 +81,15 @@ class NetworkMapView:
             if any(key.casefold() in label.casefold() for key in config.focused_routes)
         )
         self.route_var = tk.StringVar(
-            value=preferred[0] if preferred else (route_labels[0] if route_labels else "")
+            value=(
+                "All routes"
+                if default_scope == MapScope.SYSTEM
+                else preferred[0]
+                if preferred
+                else route_labels[0]
+                if route_labels
+                else ""
+            )
         )
         self.route_two_var = tk.StringVar(value=preferred[1] if len(preferred) > 1 else "None")
         self.direction_var = tk.StringVar(value=config.rail_direction)
@@ -96,20 +110,14 @@ class NetworkMapView:
         scope = ttk.Combobox(
             toolbar,
             textvariable=self.scope_var,
-            values=tuple(SCOPE_LABELS.values()),
+            values=(SCOPE_LABELS[MapScope.SYSTEM], SCOPE_LABELS[MapScope.FOCUSED]),
             width=12,
             state="readonly",
         )
         scope.pack(side="left")
         scope.bind(
             "<<ComboboxSelected>>",
-            lambda _event: set_scope(
-                next(
-                    item.value
-                    for item, label in SCOPE_LABELS.items()
-                    if label == self.scope_var.get()
-                )
-            ),
+            lambda _event: self._scope_changed(),
         )
         ttk.Label(toolbar, text="Direction").pack(side="left", padx=(8, 2))
         direction = ttk.Combobox(
@@ -134,9 +142,15 @@ class NetworkMapView:
         )
         speed.pack(side="left")
         speed.bind("<<ComboboxSelected>>", lambda _event: set_speed(float(self.speed_var.get())))
-        ttk.Checkbutton(toolbar, text="Labels", variable=self.labels_var, command=self.redraw).pack(
-            side="left", padx=5
-        )
+        ttk.Checkbutton(
+            toolbar,
+            text="Major labels",
+            variable=self.labels_var,
+            command=self.redraw,
+        ).pack(side="left", padx=5)
+        ttk.Checkbutton(
+            toolbar, text="All stations", variable=self.all_stations_var, command=self.redraw
+        ).pack(side="left", padx=5)
         ttk.Checkbutton(toolbar, text="Trains", variable=self.trains_var, command=self.redraw).pack(
             side="left", padx=5
         )
@@ -150,7 +164,7 @@ class NetworkMapView:
         self.route_combo = ttk.Combobox(
             toolbar,
             textvariable=self.route_var,
-            values=route_labels,
+            values=("All routes", *route_labels),
             width=17,
             state="readonly",
         )
@@ -167,6 +181,7 @@ class NetworkMapView:
         self.route_two_combo.pack(side="left")
         self.route_two_combo.bind("<<ComboboxSelected>>", lambda _event: self._routes_changed())
         ttk.Button(toolbar, text="Export PNG", command=self.save_png).pack(side="right", padx=2)
+        ttk.Button(toolbar, text="Record GIF", command=record_gif).pack(side="right", padx=2)
 
         self.canvas = tk.Canvas(
             self.frame, background=config.background_color, highlightthickness=0
@@ -219,10 +234,8 @@ class NetworkMapView:
             return
         width = self._map_width(max(320, self.canvas.winfo_width()))
         height = max(240, self.canvas.winfo_height())
-        if self.viewport is None:
-            self.viewport = MapViewport.fit(
-                self.scene.network.bounds, width, height, self.config.padding
-            )
+        if self.viewport is None or self.scene.scope == MapScope.SYSTEM:
+            self.viewport = self._fitted_viewport(width, height)
         else:
             self.viewport.width, self.viewport.height = width, height
         self.redraw()
@@ -230,13 +243,18 @@ class NetworkMapView:
     def fit_all(self) -> None:
         if self.scene is None:
             return
-        self.viewport = MapViewport.fit(
-            self.scene.network.bounds,
+        self.viewport = self._fitted_viewport(
             self._map_width(max(320, self.canvas.winfo_width())),
             max(240, self.canvas.winfo_height()),
-            self.config.padding,
         )
         self.redraw()
+
+    def _fitted_viewport(self, width: int, height: int) -> MapViewport:
+        if self.scene is not None and self.scene.scope == MapScope.SYSTEM:
+            return system_viewport(width, height)
+        if self.scene is None:
+            return MapViewport(width, height, Point(0, 0), 1)
+        return MapViewport.fit(self.scene.network.bounds, width, height, self.config.padding)
 
     def _map_width(self, canvas_width: int) -> int:
         if (
@@ -248,19 +266,32 @@ class NetworkMapView:
         return canvas_width
 
     def _visible_routes(self) -> frozenset[str] | None:
-        if self.scene is not None and self.scene.scope != MapScope.FULL:
+        if self.scene is not None and self.scene.scope not in {MapScope.SYSTEM, MapScope.FULL}:
             return None
         values = (self.route_var.get(), self.route_two_var.get())
         selected = frozenset(
-            value.split(" — ", 1)[0] for value in values if value and value != "None"
+            value.split(" — ", 1)[0]
+            for value in values
+            if value and value not in {"None", "All routes"}
         )
-        return selected or None
+        return None if "All routes" in values else selected or None
 
     def _routes_changed(self) -> None:
         values = (self.route_var.get(), self.route_two_var.get())
-        routes = tuple(value.split(" — ", 1)[0] for value in values if value and value != "None")
+        routes = tuple(
+            value.split(" — ", 1)[0]
+            for value in values
+            if value and value not in {"None", "All routes"}
+        )
         self.set_routes_callback(routes)
         self.redraw()
+
+    def _scope_changed(self) -> None:
+        scope = next(item for item, label in SCOPE_LABELS.items() if label == self.scope_var.get())
+        if scope == MapScope.SYSTEM:
+            self.route_var.set("All routes")
+            self.route_two_var.set("None")
+        self.set_scope_callback(scope.value)
 
     def _animated_scene(self) -> MapScene | None:
         if self.scene is None:
@@ -294,7 +325,14 @@ class NetworkMapView:
                     )
                 )
         markers = tuple((*smoothed, *estimates))
-        if self.scene.scope in {MapScope.FOCUSED, MapScope.CBD}:
+        if self.scene.scope == MapScope.SYSTEM:
+            markers = resolve_system_marker_overlaps(
+                markers,
+                self.scene.network,
+                self.scene.trips,
+                self.config.train_collision_spacing,
+            )
+        elif self.scene.scope in {MapScope.FOCUSED, MapScope.CBD}:
             spacing = (
                 self.config.focused_track_spacing
                 if self.scene.scope == MapScope.FOCUSED
@@ -307,6 +345,14 @@ class NetworkMapView:
         scene = self._animated_scene()
         if scene is None or self.viewport is None:
             return
+        canvas_width = max(320, self.canvas.winfo_width())
+        canvas_height = max(240, self.canvas.winfo_height())
+        fitted_scale = system_viewport(canvas_width, canvas_height).scale
+        zoomed_system_labels = (
+            scene.scope == MapScope.SYSTEM
+            and not self.led_preview_var.get()
+            and self.viewport.scale >= fitted_scale * 1.35
+        )
         options = MapRenderOptions(
             show_labels=self.labels_var.get(),
             show_trains=self.trains_var.get(),
@@ -326,10 +372,18 @@ class NetworkMapView:
             train_sprite_size=self.config.rail_sprite_size,
             show_direction_animation=self.config.show_direction_animation,
             animation_frame=int(time.monotonic() * 4),
+            show_major_labels=self.labels_var.get(),
+            show_minor_labels=self.minor_labels_var.get() or zoomed_system_labels,
+            show_all_stations=self.all_stations_var.get(),
+            max_led_labels=self.config.max_led_labels,
+            compact_legend=self.config.compact_legend,
         )
         if self.led_preview_var.get() and scene.scope != MapScope.FULL:
-            logical_viewport = MapViewport.fit(
-                scene.network.bounds, self.config.rail_map_width, 64, 1
+            logical_width = 128 if scene.scope == MapScope.SYSTEM else self.config.rail_map_width
+            logical_viewport = (
+                system_viewport(logical_width, 64)
+                if scene.scope == MapScope.SYSTEM
+                else MapViewport.fit(scene.network.bounds, logical_width, 64, 1)
             )
             logical = self.renderer.render(
                 scene, (128, 64), viewport=logical_viewport, options=options

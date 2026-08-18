@@ -132,6 +132,7 @@ class DesktopSimulator:
                 set_scope=self.set_map_scope,
                 set_routes=self.set_rail_routes,
                 set_direction=self.set_rail_direction,
+                record_gif=self.record_gif,
             )
             self.notebook.add(self.map_view.frame, text="Rail Map")
             if self.default_view in {"map", "network", "rail-map"}:

@@ -6,16 +6,29 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont
 
 from train_tracker.map.cbd import normalized_station_name
-from train_tracker.map.geometry import cumulative_lengths, distance, point_at_distance
+from train_tracker.map.geometry import (
+    cumulative_lengths,
+    distance,
+    point_at_distance,
+    snap_to_polyline,
+)
 from train_tracker.map.models import (
     HitTarget,
     MapScene,
     MapScope,
     Point,
+    RailTrip,
     TrainMarker,
     TrainPositionSource,
 )
 from train_tracker.map.projection import MapViewport
+from train_tracker.map.system import (
+    LabelRequest,
+    Rect,
+    choose_information_overlay,
+    place_system_labels,
+    system_viewport,
+)
 from train_tracker.rendering.fonts import draw_text as draw_pixel_text
 from train_tracker.rendering.layout import abbreviate
 
@@ -28,15 +41,20 @@ class MapRenderOptions:
     visible_routes: frozenset[str] | None = None
     background: str = "#080a0d"
     highlighted_station_id: str = "place_twgsta"
-    scope: MapScope = MapScope.FULL
+    scope: MapScope = MapScope.SYSTEM
     show_compass: bool = False
     show_symbol_legend: bool = True
     reserve_info_panel: bool = False
     info_panel_width: int = 36
     selected_train_id: str | None = None
-    train_sprite_size: str = "6x4"
+    train_sprite_size: str = "5x3"
     show_direction_animation: bool = True
     animation_frame: int = 0
+    show_major_labels: bool = True
+    show_minor_labels: bool = False
+    show_all_stations: bool = False
+    max_led_labels: int = 10
+    compact_legend: bool = True
 
 
 RGB = tuple[int, int, int]
@@ -63,6 +81,7 @@ def draw_train_sprite(
     selected: bool = False,
     dwelling: bool = False,
     animation_frame: int = 0,
+    heading: Point | None = None,
 ) -> tuple[int, int, int, int]:
     """Draw a directional miniature train designed for the native LED canvas."""
     width, height = (int(value) for value in size.split("x", 1))
@@ -81,10 +100,19 @@ def draw_train_sprite(
         for x in range(x0 + 1, x1):
             if (x + animation_frame) % 2 == 0 and y0 + 1 < y1:
                 draw.point((x, y0 + 1), fill=body)
-    front_x = x1 if direction_id == 0 else x0
-    tail_x = x0 if direction_id == 0 else x1
-    draw.point((front_x, y0 + 1), fill=(255, 255, 220))
-    draw.point((tail_x, y0 + 1), fill=(255, 72, 72))
+    if heading is not None and abs(heading.y) > abs(heading.x):
+        forward = heading.y >= 0
+        front_y = y1 if forward else y0
+        tail_y = y0 if forward else y1
+        draw.point((x0 + width // 2, front_y), fill=(255, 255, 220))
+        draw.point((x0 + width // 2, tail_y), fill=(255, 72, 72))
+    else:
+        forward = heading.x >= 0 if heading is not None else direction_id == 0
+        front_x = x1 if forward else x0
+        tail_x = x0 if forward else x1
+        marker_y = y0 + (1 if heading is None else height // 2)
+        draw.point((front_x, marker_y), fill=(255, 255, 220))
+        draw.point((tail_x, marker_y), fill=(255, 72, 72))
     if width >= 6 and height >= 4:
         draw.line((x0 + 2, y0, x1 - 2, y0), fill=_dim(body, 1.2))
         draw.point((x0 + 1, y1), fill=(0, 0, 0))
@@ -113,8 +141,16 @@ class NetworkMapRenderer:
         compact = width <= 160 or height <= 80
         panel_width = self._panel_width(width, scene, options, compact)
         map_width = max(1, width - panel_width)
-        padding = 1 if compact and scene.scope == MapScope.FOCUSED else (4 if compact else 55)
-        viewport = viewport or MapViewport.fit(scene.network.bounds, map_width, height, padding)
+        padding = (
+            1
+            if compact and scene.scope in {MapScope.SYSTEM, MapScope.FOCUSED}
+            else (4 if compact else 55)
+        )
+        viewport = viewport or (
+            system_viewport(map_width, height)
+            if scene.scope == MapScope.SYSTEM
+            else MapViewport.fit(scene.network.bounds, map_width, height, padding)
+        )
         viewport.width = map_width
         viewport.height = height
         route_ids = options.visible_routes or frozenset(scene.network.routes)
@@ -132,6 +168,8 @@ class NetworkMapRenderer:
             options.scope,
             options.show_compass,
             options.show_symbol_legend,
+            options.show_all_stations,
+            options.compact_legend,
             compact,
         )
         if key != self._static_key or self._static_image is None:
@@ -144,6 +182,15 @@ class NetworkMapRenderer:
                 map_image, scene, viewport, route_ids, options.animation_frame
             )
         trips_by_id = {trip.id: trip for trip in scene.trips}
+        if scene.scope == MapScope.SYSTEM and options.show_labels:
+            self._draw_system_labels(
+                map_image,
+                scene,
+                viewport,
+                route_ids,
+                options,
+                compact,
+            )
         if options.show_trains:
             for marker in scene.markers:
                 if marker.route_id not in route_ids:
@@ -173,9 +220,18 @@ class NetworkMapRenderer:
                     direction_id=int(trip.direction_id or 0) if trip is not None else 0,
                     dwelling=dwelling,
                     animation_frame=options.animation_frame,
+                    heading=self._marker_heading(scene, marker, trip),
                 )
+        if compact and scene.scope == MapScope.SYSTEM:
+            self._redraw_system_station_centres(map_image, scene, viewport, route_ids, options)
         if compact:
             self._draw_compact_status(map_image, scene)
+            if (
+                scene.scope == MapScope.SYSTEM
+                and options.compact_legend
+                and options.selected_train_id is None
+            ):
+                self._draw_compact_route_key(map_image, scene, route_ids)
         else:
             self._draw_status(draw, scene, map_width)
             if options.show_symbol_legend:
@@ -188,6 +244,8 @@ class NetworkMapRenderer:
         )
         if panel_width and selected is not None:
             self._draw_train_info(image, selected, map_width, panel_width, compact)
+        elif compact and scene.scope == MapScope.SYSTEM and selected is not None:
+            self._draw_system_train_info(image, scene, selected, viewport)
         return image
 
     @staticmethod
@@ -228,6 +286,12 @@ class NetworkMapRenderer:
             serving_visible = [item for item in station.route_ids if item in route_ids]
             if not serving_visible:
                 continue
+            if (
+                compact
+                and options.scope == MapScope.SYSTEM
+                and not self._system_station_visible(station.id, scene, options)
+            ):
+                continue
             point = viewport.world_to_screen(station.position)
             radius = (
                 (2 if station.interchange else 1) if compact else (5 if station.interchange else 3)
@@ -248,8 +312,10 @@ class NetworkMapRenderer:
                 fill="#e8edf2",
                 outline="#11161c",
             )
-            if options.show_labels and (
-                not compact or options.scope != MapScope.FOCUSED or station.interchange
+            if (
+                options.show_labels
+                and options.scope != MapScope.SYSTEM
+                and (not compact or options.scope != MapScope.FOCUSED or station.interchange)
             ):
                 label_world = scene.network.label_positions.get(station.id)
                 label_point = (
@@ -274,7 +340,11 @@ class NetworkMapRenderer:
                         stroke_fill=options.background,
                     )
         if not compact:
-            self._draw_route_legend(draw, scene, route_ids)
+            if options.compact_legend:
+                if options.scope == MapScope.SYSTEM:
+                    self._draw_system_desktop_legend(draw, scene, route_ids, viewport.width)
+                else:
+                    self._draw_route_legend(draw, scene, route_ids)
             if options.show_symbol_legend:
                 self._draw_station_legend(draw)
             if options.show_compass and options.scope == MapScope.FULL:
@@ -295,9 +365,10 @@ class NetworkMapRenderer:
         direction_id: int,
         dwelling: bool,
         animation_frame: int,
+        heading: Point | None,
     ) -> None:
         if compact:
-            draw_train_sprite(
+            bounds = draw_train_sprite(
                 image,
                 point,
                 _rgb(route_color),
@@ -308,7 +379,21 @@ class NetworkMapRenderer:
                 selected=selected,
                 dwelling=dwelling,
                 animation_frame=animation_frame,
+                heading=heading,
             )
+            if marker.cluster_count > 1:
+                count = str(min(9, marker.cluster_count))
+                draw.rectangle(
+                    (bounds[2] - 1, bounds[1] - 2, bounds[2] + 4, bounds[1] + 3),
+                    fill="#080a0d",
+                )
+                draw_pixel_text(
+                    image,
+                    (bounds[2], bounds[1] - 2),
+                    count,
+                    (255, 235, 122),
+                    max_width=4,
+                )
             return
         radius = 2 if compact else 6
         if marker.source == TrainPositionSource.LIVE_GPS:
@@ -332,6 +417,236 @@ class NetworkMapRenderer:
                 (point.x - ring, point.y - ring, point.x + ring, point.y + ring),
                 outline="#ffef77",
                 width=1 if compact else 2,
+            )
+
+    @staticmethod
+    def _system_station_visible(
+        station_id: str, scene: MapScene, options: MapRenderOptions
+    ) -> bool:
+        station = scene.network.stations[station_id]
+        if options.show_all_stations or station.interchange:
+            return True
+        if station_id in scene.network.label_positions:
+            return True
+        # A stable sample retains station rhythm without filling every LED.
+        return sum(ord(value) for value in station_id) % 4 == 0
+
+    def _draw_system_labels(
+        self,
+        image: Image.Image,
+        scene: MapScene,
+        viewport: MapViewport,
+        route_ids: frozenset[str],
+        options: MapRenderOptions,
+        compact: bool,
+    ) -> None:
+        requests: list[LabelRequest] = []
+        selected = next(
+            (marker for marker in scene.markers if marker.id == options.selected_train_id),
+            None,
+        )
+        selected_names = {
+            normalized_station_name(name)
+            for name in (
+                selected.next_station if selected else None,
+                selected.previous_station if selected else None,
+            )
+            if name
+        }
+        blockers: list[Rect] = []
+        if not compact and options.compact_legend:
+            blockers.append(Rect(max(0, viewport.width - 500), 0, viewport.width, 72))
+        for marker in scene.markers:
+            if marker.route_id not in route_ids:
+                continue
+            point = viewport.world_to_screen(marker.position)
+            radius = 3 if compact else 8
+            blockers.append(
+                Rect(point.x - radius, point.y - radius, point.x + radius, point.y + radius)
+            )
+        for station in scene.network.stations.values():
+            if not any(route_id in route_ids for route_id in station.route_ids):
+                continue
+            point = viewport.world_to_screen(station.position)
+            if station.interchange:
+                radius = 2 if compact else 7
+                blockers.append(
+                    Rect(point.x - radius, point.y - radius, point.x + radius, point.y + radius)
+                )
+            is_major = station.id in scene.network.label_positions
+            is_selected_station = station.id == options.highlighted_station_id
+            is_selected_call = normalized_station_name(station.name) in selected_names
+            if not (
+                is_selected_station
+                or is_selected_call
+                or (options.show_major_labels and is_major)
+                or options.show_minor_labels
+            ):
+                continue
+            requests.append(
+                LabelRequest(
+                    station.id,
+                    (
+                        abbreviate(normalized_station_name(station.name), 3)
+                        if compact
+                        else station.name
+                    ),
+                    point,
+                    priority=(
+                        120
+                        if is_selected_call
+                        else 110
+                        if is_selected_station
+                        else 80
+                        if station.interchange
+                        else 40
+                    ),
+                    interchange=station.interchange,
+                )
+            )
+        placements = place_system_labels(
+            tuple(requests),
+            width=viewport.width,
+            height=viewport.height,
+            max_labels=(
+                options.max_led_labels
+                if compact
+                else max(24, options.max_led_labels * 5)
+                if options.show_minor_labels
+                else max(12, options.max_led_labels * 2)
+            ),
+            blockers=tuple(blockers),
+            status_bounds=Rect(0, 0, min(300, viewport.width), 60 if not compact else 6),
+            compact=compact,
+        )
+        for request in requests:
+            label_point = placements.get(request.id)
+            if label_point is None:
+                continue
+            color = (
+                (255, 220, 112) if request.id == options.highlighted_station_id else (219, 226, 232)
+            )
+            if compact:
+                draw_pixel_text(
+                    image,
+                    (round(label_point.x), round(label_point.y)),
+                    request.text,
+                    color,
+                    max_width=12,
+                )
+            else:
+                ImageDraw.Draw(image).text(
+                    (label_point.x, label_point.y),
+                    request.text,
+                    font=self.font,
+                    fill=color,
+                    stroke_width=2,
+                    stroke_fill=options.background,
+                )
+
+    @staticmethod
+    def _marker_heading(
+        scene: MapScene, marker: TrainMarker, trip: RailTrip | None
+    ) -> Point | None:
+        shape = scene.network.shapes.get(trip.shape_id or "") if trip is not None else None
+        if trip is None or shape is None or len(shape.points) < 2 or len(trip.stops) < 2:
+            return None
+        _point, _distance, along = snap_to_polyline(marker.position, shape.points)
+        first_along = snap_to_polyline(
+            scene.network.stations[trip.stops[0].station_id].position, shape.points
+        )[2]
+        last_along = snap_to_polyline(
+            scene.network.stations[trip.stops[-1].station_id].position, shape.points
+        )[2]
+        sign = 1 if last_along >= first_along else -1
+        before = point_at_distance(shape.points, along - sign)
+        after = point_at_distance(shape.points, along + sign)
+        return Point(after.x - before.x, after.y - before.y)
+
+    @staticmethod
+    def _redraw_system_station_centres(
+        image: Image.Image,
+        scene: MapScene,
+        viewport: MapViewport,
+        route_ids: frozenset[str],
+        options: MapRenderOptions,
+    ) -> None:
+        draw = ImageDraw.Draw(image)
+        for station in scene.network.stations.values():
+            if not any(route_id in route_ids for route_id in station.route_ids):
+                continue
+            if not NetworkMapRenderer._system_station_visible(station.id, scene, options):
+                continue
+            point = viewport.world_to_screen(station.position)
+            x, y = round(point.x), round(point.y)
+            if station.interchange:
+                draw.ellipse((x - 2, y - 2, x + 2, y + 2), outline="#f5f8fb")
+            draw.point((x, y), fill="#ffffff")
+
+    @staticmethod
+    def _draw_compact_route_key(
+        image: Image.Image, scene: MapScene, route_ids: frozenset[str]
+    ) -> None:
+        visible = [route for route in scene.network.routes.values() if route.id in route_ids]
+        if not visible:
+            return
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((0, image.height - 2, image.width - 1, image.height - 1), fill="#080a0d")
+        sample_width = max(2, image.width // len(visible))
+        for index, route in enumerate(visible):
+            left = index * sample_width
+            right = image.width - 1 if index == len(visible) - 1 else left + sample_width - 1
+            draw.line((left, image.height - 1, right, image.height - 1), fill=route.color)
+
+    def _draw_system_train_info(
+        self,
+        image: Image.Image,
+        scene: MapScene,
+        marker: TrainMarker,
+        viewport: MapViewport,
+    ) -> None:
+        marker_points = tuple(viewport.world_to_screen(item.position) for item in scene.markers)
+        selected_point = viewport.world_to_screen(marker.position)
+        next_station = next(
+            (
+                station
+                for station in scene.network.stations.values()
+                if marker.next_station
+                and normalized_station_name(station.name)
+                == normalized_station_name(marker.next_station)
+            ),
+            None,
+        )
+        avoid: tuple[Point, ...] = (selected_point,)
+        if next_station is not None:
+            avoid += (viewport.world_to_screen(next_station.position),)
+        bounds = choose_information_overlay(
+            image.width,
+            image.height,
+            blocked_points=marker_points,
+            avoid_points=avoid,
+        )
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            (bounds.left, bounds.top, bounds.right, bounds.bottom),
+            fill="#0c1117",
+            outline="#64717f",
+        )
+        source = "LIVE" if marker.source == TrainPositionSource.LIVE_GPS else "EST"
+        delay = f"{marker.delay_seconds // 60:+d}M" if marker.delay_seconds else "ON TIME"
+        lines = (
+            f"{abbreviate(marker.route_name, 3)}>{abbreviate(marker.destination, 3)}",
+            f"{abbreviate(marker.previous_station or '-', 3)}-"
+            f"{abbreviate(marker.next_station or '-', 3)}",
+            f"{source} {delay}",
+        )
+        for index, line in enumerate(lines):
+            draw_pixel_text(
+                image,
+                (round(bounds.left) + 1, round(bounds.top) + 1 + index * 6),
+                line,
+                (236, 241, 245),
+                max_width=round(bounds.right - bounds.left) - 2,
             )
 
     @staticmethod
@@ -406,6 +721,34 @@ class NetworkMapRenderer:
             draw.line((18, y + 5, 38, y + 5), fill=route.color, width=5)
             draw.text((45, y), route.name, font=self.font, fill="#cbd3da")
             y += 17
+
+    def _draw_system_desktop_legend(
+        self,
+        draw: ImageDraw.ImageDraw,
+        scene: MapScene,
+        route_ids: frozenset[str],
+        width: int,
+    ) -> None:
+        routes = [route for route in scene.network.routes.values() if route.id in route_ids]
+        if not routes:
+            return
+        rows = min(4, len(routes))
+        column_width = 240
+        left = max(10, width - column_width * math.ceil(len(routes) / rows) - 12)
+        right = width - 10
+        draw.rounded_rectangle((left, 8, right, 68), radius=5, fill="#0c1117", outline="#303946")
+        for index, route in enumerate(routes):
+            column = index // rows
+            row = index % rows
+            x = left + 10 + column * column_width
+            y = 15 + row * 13
+            draw.line((x, y + 5, x + 18, y + 5), fill=route.color, width=4)
+            draw.text(
+                (x + 25, y),
+                route.name,
+                font=self.font,
+                fill="#cbd3da",
+            )
 
     def _draw_station_legend(self, draw: ImageDraw.ImageDraw) -> None:
         y = 58

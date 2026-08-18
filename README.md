@@ -1,6 +1,6 @@
 # Queensland Train Tracker
 
-> A three-screen Queensland public-transport simulator and native 128×64 LED display engine for departures, animated rail services, and Brisbane Metro/busway operations.
+> A native 128×64 Queensland public-transport display engine for departures, a connected SEQ rail system schematic, focused rail corridors, and Brisbane Metro/busway operations.
 
 [![CI](https://github.com/lachlanthwaite6/Train-Tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/lachlanthwaite6/Train-Tracker/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB.svg)
@@ -13,13 +13,21 @@ Queensland Train Tracker lets you design, simulate, test, and record public-tran
 
 **This is an independent open-source project. It is not official Translink software, is not endorsed by Translink or the Queensland Government, and does not use their logos or map artwork.**
 
-## Three displays
+## Display views
 
-| Screen | Purpose | Preview |
-| --- | --- | --- |
-| Departure Board | Upcoming services, countdowns, destinations, platforms, delays, cancellations, alerts, and feed state | ![Departure board demonstration](docs/media/departure-board.gif) |
-| Rail Map | Focused one/two-route rail schematics, parallel tracks, stations, and animated train sprites | ![Rail-map demonstration](docs/media/rail-map.gif) |
-| Bus Map | Brisbane Metro/busway route focus with inbound/outbound lanes and animated bus sprites | ![Bus-map demonstration](docs/media/bus-map.gif) |
+| Screen | Best for |
+| --- | --- |
+| Departure Board | Upcoming services, platforms and delays |
+| Rail System View | Seeing trains across the connected SEQ network |
+| Rail Route Focus | Watching individual trains between stations |
+| Bus Map | Following Metro and selected busway services |
+
+| Preview | Actual application recording |
+| --- | --- |
+| Departure Board | ![Departure board demonstration](docs/media/departure-board.gif) |
+| Rail System View | ![Connected rail-system demonstration](docs/media/rail-system-map.gif) |
+| Rail Route Focus | ![Focused rail-route demonstration](docs/media/rail-route-focus.gif) |
+| Bus Map | ![Bus-map demonstration](docs/media/bus-map.gif) |
 
 The desktop GUI switches among all three screens without restarting and shares one clock, provider refresh, and latest realtime snapshot.
 
@@ -35,11 +43,11 @@ The desktop GUI switches among all three screens without restarting and shares o
 
 - Exact 128×64 RGB framebuffer rendered directly with Pillow—never designed large and downscaled.
 - Original bundled 3×5 pixel font and nearest-neighbour desktop preview.
-- Three native screens in one responsive Tkinter application.
+- Three native tabs in one responsive Tkinter application, with System View and Route Focus inside Rail Map.
 - Pause, resume, restart, single-step, and 1×/10×/60× simulated time.
 - Route, direction, map-scope, label, live-marker, and scheduled-estimate controls.
 - Neon night styling using GTFS route colours, luminous stops, parallel lanes/tracks, and restrained direction pulses.
-- Recognizable directional 6×4 train and bus sprites with live, estimated, stale, dwelling, and selected states.
+- Compact directional 5×3 rail markers and 6×4 bus sprites with live, estimated, stale, dwelling, selected, and clustered states.
 - Static GTFS import to indexed SQLite with service-calendar and after-midnight support.
 - Optional GTFS-Realtime TripUpdates, VehiclePositions, and Alerts with bounded retries and last-known-good fallback.
 - Deterministic replay files and offline failure scenarios.
@@ -54,11 +62,17 @@ The desktop GUI switches among all three screens without restarting and shares o
 
 The recording advances the real simulator clock, showing countdown changes, multiple destinations, accumulated delays, a platform change, and a cancellation.
 
-### Rail map
+### Rail System View
 
-![Two-route focused rail map with moving trains](docs/media/rail-map.gif)
+![Connected SEQ rail schematic with moving trains](docs/media/rail-system-map.gif)
 
-The showcase resolves the Airport/Varsity Lakes and Beenleigh/Ferny Grove route groups from the imported GTFS database, spaces selected stations across a 90-pixel map canvas, separates opposing tracks, mixes a GTFS-matched demonstration GPS train with schedule estimates, and opens the train information area.
+System View is the default Rail Map scope. It derives passenger-readable visual lines, branches, station order, shared corridors, termini, and interchanges from imported GTFS. The resulting octilinear schematic deliberately changes geographic distance while preserving network topology and approximate direction. It fills the 128×64 canvas, offsets colours on shared corridors, samples minor stations, places major labels around collisions, and moves a selected train's three-line details into the least obstructive corner.
+
+### Rail Route Focus
+
+![One/two-route focused rail schematic](docs/media/rail-route-focus.gif)
+
+Route Focus retains the larger corridor presentation for inspecting one or two selected services. It separates directions, spaces displayed stops, and reserves its contextual information area only when a train is selected. Switch between System View and Route Focus from the toolbar without restarting.
 
 ### Bus map
 
@@ -72,7 +86,7 @@ The GIFs are generated by `train-tracker record-demo` from the same renderers us
 
 - Up to four upcoming departures with route, destination, platform, countdown, delay, cancellation, and realtime state.
 - Healthy, stale, offline, alert, timetable-only, and no-service states.
-- A full geographic rail network derived from GTFS shapes.
+- A fitted connected rail schematic with major SEQ corridors and branches derived from GTFS.
 - A focused rail corridor containing one route or a related pair, inbound, outbound, or both.
 - A selected Metro/busway route with parallel inbound/outbound lanes.
 - Solid live-GPS vehicles, hollow/dithered scheduled estimates, dim stale vehicles, dwelling animation, and selected halos.
@@ -103,11 +117,12 @@ Open a specific screen directly:
 
 ```bash
 train-tracker gui --mode simulated --view departures
-train-tracker gui --mode simulated --view rail-map --map-scope focused
+train-tracker gui --mode simulated --view map --map-scope system
+train-tracker gui --mode simulated --view map --map-scope route
 train-tracker gui --mode simulated --view bus-map --bus-route M1
 ```
 
-The Rail Map toolbar supports route 1, optional route 2, inbound/outbound/both, focused/central/full scope, fit/reset, live/estimate/label toggles, pause/resume, simulation speed, PNG export, and a native LED preview. The Bus Map exposes equivalent bus-focused controls. The shared GUI also provides GIF recording.
+The Rail Map toolbar supports System View/Route Focus switching, route filters, inbound/outbound/both, major-label and all-station controls, train and scheduled-estimate toggles, fit/reset, pause/resume, 1×/10×/60× speed, PNG export, GIF recording, LED preview, pan, zoom, hover details, click-to-pin, and click-empty-to-clear. The Bus Map exposes equivalent bus-focused controls.
 
 ## Static GTFS import
 
@@ -124,7 +139,8 @@ Downloaded ZIPs and generated SQLite databases are intentionally ignored by Git.
 
 ```bash
 train-tracker gui --mode live --view departures
-train-tracker gui --mode live --view rail-map --map-scope focused
+train-tracker gui --mode live --view map --map-scope system
+train-tracker gui --mode live --view map --map-scope route
 train-tracker gui --mode live --view bus-map --bus-route M1
 ```
 
@@ -140,7 +156,8 @@ If realtime is unavailable, stale, expired, unmatched, or implausibly distant fr
 | Scheduled estimate | Hollow/dithered body with route-coloured outline | Position interpolated from static stop times, dwell, shape geometry, and known delay |
 | Stale GPS | Dim body and reduced contrast | Last physical observation is older than the configured stale threshold |
 | Cancelled | Hidden from the moving map; marked `CXL` on departures | TripUpdate reports the service cancelled |
-| Selected | Pulsing one-pixel halo and compact right-side details | Hovered, pinned, or automatically cycled vehicle |
+| Selected | Pulsing one-pixel halo and temporary three-line overlay | Hovered, pinned, or automatically cycled vehicle |
+| Cluster | Stable count marker | More than four trains occupy the same tiny LED area |
 
 GPS observations expire after the configured limit. Large backwards jumps are clamped, implausible coordinates are rejected, and colliding markers receive deterministic offsets.
 
@@ -161,10 +178,20 @@ Replay data uses an injectable clock and time-ordered provider snapshots. See [`
 
 ```bash
 train-tracker render-map \
-  --mode simulated --scope focused \
+  --mode simulated --scope system \
+  --width 128 --height 64 \
+  --output output/rail-system-led.png
+
+train-tracker render-map \
+  --mode simulated --scope system \
+  --width 1280 --height 640 \
+  --output output/rail-system-preview.png
+
+train-tracker render-map \
+  --mode simulated --scope route \
   --route Airport --route Ferny \
   --width 128 --height 64 \
-  --output output/rail-led.png
+  --output output/rail-route-focus.png
 
 train-tracker render-bus-map \
   --mode simulated --route M1 \
@@ -172,12 +199,12 @@ train-tracker render-bus-map \
   --output output/bus-led.png
 ```
 
-Focused rail uses 90 pixels for the route and 38 pixels for contextual information. Bus Map uses the same default 90/38 composition. The right side is visually untouched—no border, panel fill, heading, or placeholder—until a vehicle is selected. Route geometry is rendered into a separately sized map image and cannot leak into that region.
+The 128×64 System View is constructed directly at the board resolution; it is not a reduced desktop screenshot. Its network uses almost the whole canvas, leaving only a minimal status strip. Selected-train information is temporary and corner-placed. Route Focus uses 90 pixels for the route and 38 pixels for contextual information. Bus Map uses the same default 90/38 composition.
 
-Larger focused previews are nearest-neighbour enlargements of the native frame:
+The desktop System View is rendered at its requested size with extra label detail. Focused LED previews are nearest-neighbour enlargements of the native frame:
 
 ```bash
-train-tracker render-map --scope focused --route Airport \
+train-tracker render-map --scope route --route Airport \
   --width 768 --height 384 --output output/rail-preview.png
 
 train-tracker render-bus-map --route M1 \
@@ -190,8 +217,11 @@ train-tracker render-bus-map --route M1 \
 train-tracker record-demo --view departures --duration 12 \
   --output docs/media/departure-board.gif
 
-train-tracker record-demo --view rail-map --routes Airport,Ferny --duration 15 \
-  --output docs/media/rail-map.gif
+train-tracker record-demo --view rail-system-map --duration 15 \
+  --output docs/media/rail-system-map.gif
+
+train-tracker record-demo --view rail-route-focus --routes Airport,Ferny --duration 15 \
+  --output docs/media/rail-route-focus.gif
 
 train-tracker record-demo --view bus-map --routes M1 --duration 15 \
   --output docs/media/bus-map.gif
@@ -210,7 +240,14 @@ Important rail settings under `[map]`:
 
 | Setting | Default | Purpose |
 | --- | ---: | --- |
-| `default_scope` | `focused` | Focused route, legacy central corridor, or full geographic view |
+| `default_scope` | `system` | Connected System View by default; `route`/legacy `focused` selects Route Focus |
+| `system_screen_coverage` | `0.82` | Minimum target area occupied by system geometry |
+| `show_major_station_labels` | `true` | Label principal termini/interchanges subject to collision placement |
+| `show_minor_station_labels` | `false` | Add minor labels on the desktop only |
+| `route_lane_spacing` | `2` | Separation between colours on shared rail corridors |
+| `train_collision_spacing` | `2` | Stable perpendicular separation for nearby trains |
+| `max_led_labels` | `10` | Hard maximum for labels on the physical-size frame |
+| `compact_legend` | `true` | Use the two-pixel route-colour key instead of a large LED legend |
 | `focused_routes` | `[]` | Up to two GTFS route IDs or name fragments; empty chooses active routes |
 | `rail_direction` | `both` | `inbound`, `outbound`, or `both` |
 | `rail_map_width` | `90` | Logical route-canvas width |
@@ -218,7 +255,7 @@ Important rail settings under `[map]`:
 | `focused_route_coverage` | `0.70` | Target share of the full display occupied by route geometry |
 | `focused_track_spacing` | `4` | Parallel direction/route separation |
 | `focused_station_spacing` | `8` | Minimum target spacing for displayed stops |
-| `rail_sprite_size` | `6x4` | `5x3`, `6x4`, or `7x5` |
+| `rail_sprite_size` | `5x3` | `5x3`, `6x4`, or `7x5` |
 | `auto_cycle_train_seconds` | `0` | Optional automatic physical-display selection |
 
 The `[bus_map]` section contains equivalent route, direction, 90/38 layout, coverage, lane spacing, sprite, selection-cycle, stale/expiry, glow, background, layout override, and preview-FPS settings.
@@ -228,19 +265,20 @@ The `[bus_map]` section contains equivalent route, direction, 90/38 layout, cove
 ```text
 train-tracker gui [--mode simulated|replay|live]
                   [--view departures|rail-map|bus-map]
-                  [--map-scope focused|cbd|full]
+                  [--map-scope system|route]
                   [--rail-routes ROUTE1,ROUTE2]
                   [--rail-direction inbound|outbound|both]
                   [--bus-route ROUTE]
                   [--bus-direction inbound|outbound|both]
 
 train-tracker render [--scenario SCENARIO] [--time ISO_TIME] --output FILE.png
-train-tracker render-map [--scope focused|cbd|full] [--route ROUTE]...
+train-tracker render-map [--scope system|route] [--route ROUTE]...
                          [--direction inbound|outbound|both]
                          [--select-train ID] --output FILE.png
 train-tracker render-bus-map [--route ROUTE] [--direction inbound|outbound|both]
                              [--select-bus ID] --output FILE.png
-train-tracker record-demo --view VIEW --duration SECONDS --output FILE.gif
+train-tracker record-demo --view departures|rail-system-map|rail-route-focus|bus-map|screen-switching
+                          --duration SECONDS --output FILE.gif
 train-tracker diagnostics --pattern PATTERN --output FILE.png
 train-tracker download-gtfs --output FILE.zip
 train-tracker import-gtfs FILE.zip --database FILE.sqlite3
@@ -277,6 +315,24 @@ docs/media/        generated showcase GIFs
 
 SQLite queries and schematic construction occur outside animation frames. The GUI refreshes the provider on a background worker, and both maps consume the same immutable snapshot.
 
+## Schematic layout and collision policy
+
+System View resolves GTFS platform stops to their parent physical station, consolidates timetable variants into one passenger-facing colour/name while retaining original trip and source-route IDs, selects the principal route patterns, and generates a connected octilinear layout. Shared station-to-station corridors receive stable parallel colour lanes rather than being painted over one another.
+
+LED labels try above, below, left, right, and diagonal candidates in deterministic priority order. They reject screen edges, the status strip, interchanges, train markers, and already placed labels, then stop at `max_led_labels`. Opposing trains use opposite perpendicular sides of a segment; nearby trains form stable ordered offsets; dense groups fall back to a count marker. These rules are renderer-independent and covered by headless tests.
+
+An optional `layout_file` may provide curated `system_stations` coordinates. When absent, the automatically fitted GTFS-derived schematic remains fully usable.
+
+## Current limitations
+
+- The automatic octilinear layout preserves topology and approximate direction, not geographic distance or track-level infrastructure.
+- Express patterns are consolidated into principal passenger routes, so every operational stopping variant is not drawn separately.
+- Very dense CBD activity can become a compact count marker at 128×64; zoom the desktop view for individual trains.
+- Realtime accuracy depends on upstream Translink identifiers, freshness, and availability.
+- The HUB75 adapter has not yet been verified on the final physical panel.
+
+**Schedule-derived train movement is an estimate, not a physical observation.**
+
 ## Testing
 
 ```bash
@@ -285,7 +341,7 @@ ruff check .
 mypy -p train_tracker
 ```
 
-Tests cover departure behavior, GTFS import, realtime parsing, route selection, schematic coverage, station/track spacing, GPS snapping and rejection, delay/midnight handling, sprite states, collision offsets, empty/selected information panels, all three view choices, exact 128×64 frames, deterministic GIFs, and README media paths. Automated tests do not require network access.
+Tests cover departure and Bus Map regressions, GTFS import and parent-station aggregation, realtime parsing, visual-route consolidation, branch preservation, minimum system coverage, shared-corridor lanes, opposite-direction and multi-train separation, label collisions/boundaries/count limits, overlay placement, Toowong highlighting, scope switching, GPS snapping and rejection, exact 128×64 frames, deterministic screenshots/GIFs, and README media paths. Automated tests do not require network access.
 
 ## Data-source attribution
 

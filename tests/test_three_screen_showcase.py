@@ -125,6 +125,8 @@ def test_all_three_cli_view_selections_and_map_configuration(tmp_path: Path) -> 
     parser = _parser()
     for view in ("departures", "rail-map", "bus-map"):
         assert parser.parse_args(("gui", "--view", view)).view == view
+    assert parser.parse_args(("gui", "--map-scope", "system")).map_scope == "system"
+    assert parser.parse_args(("gui", "--map-scope", "route")).map_scope == "route"
     config = MapConfig(default_view="rail-map", default_scope="focused")
     assert config.rail_map_width + config.train_info_panel_width == 128
     legacy = tmp_path / "legacy.toml"
@@ -170,7 +172,8 @@ def test_readme_showcase_media_paths_exist() -> None:
     readme = (root / "README.md").read_text(encoding="utf-8")
     for name in (
         "departure-board.gif",
-        "rail-map.gif",
+        "rail-system-map.gif",
+        "rail-route-focus.gif",
         "bus-map.gif",
         "screen-switching.gif",
     ):

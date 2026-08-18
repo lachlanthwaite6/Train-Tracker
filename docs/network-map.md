@@ -15,10 +15,36 @@ Static geometry and active service-day trips are cached. Network construction, S
 provider refreshes run outside the Tk event thread. Animation frames only transform cached geometry,
 recalculate schedule positions and blend from the preceding GPS marker position.
 
+## System View
+
+System View is the default native LED rail scope. Select it with `--map-scope system` in the GUI or
+`--scope system` in `render-map`. It derives distinct passenger route groups and principal branch
+patterns from imported GTFS, resolves platforms to parent stations, and retains the original trip
+and source route identifiers for realtime matching.
+
+The automatic layout fits the connected network into a logical 128×64 coordinate system, straightens
+ordinary corridor stations, uses horizontal/vertical/45-degree segments, and retains termini,
+branches, shared corridors and approximate geographic direction. Visual lines that share the same
+station-to-station edge receive deterministic two-pixel lane offsets. The native renderer uses an
+identity-style viewport so the designed status and edge margins are not lost during fitting.
+
+At board size, principal interchanges, a stable sample of minor stations, up to ten collision-placed
+labels, trains, and a two-pixel route-colour key are visible. On desktop, the same scene adds station
+detail, full labels, hover/click interaction, pan and zoom. A selected train opens a temporary
+three-line overlay in the corner with the fewest trains and farthest from its next station.
+
+```bash
+train-tracker gui --mode simulated --view map --map-scope system
+train-tracker render-map --mode simulated --scope system --width 128 --height 64 \
+  --output output/rail-system-led.png
+train-tracker render-map --mode simulated --scope system --width 1280 --height 640 \
+  --output output/rail-system-preview.png
+```
+
 ## Route Focus
 
-Route Focus is the default native LED view. Select it with `--map-scope focused` in the GUI or
-`--scope focused` in `render-map`. Up to two route IDs or name fragments are resolved against the
+Route Focus is the optional one/two-route native LED view. Select it with `--map-scope route`
+(`focused` remains a compatible alias) in the GUI or `--scope route` in `render-map`. Up to two route IDs or name fragments are resolved against the
 GTFS-derived canonical rail routes; no public route list is hard-coded as authoritative.
 
 For each selected route, the builder chooses a representative active trip, simplifies insignificant
@@ -32,14 +58,14 @@ geometry is rendered into a separate 90-pixel image, so glow, tracks, labels and
 into the right-hand region. The region stays completely empty until a train is hovered, pinned or
 automatically cycled.
 
-Train positions use directional 6×4 pixel sprites: solid with a bright outline for GPS, hollow or
+Train positions use compact directional 5×3 pixel sprites by default: solid with a bright outline for GPS, hollow or
 dithered for schedule estimates, dimmed when stale, and surrounded by a restrained halo when
 selected. Windscreen/headlight and tail-light pixels communicate direction; dark lower pixels
 suggest bogies. Dwell and direction animations use only a few frames.
 
 ```bash
-train-tracker gui --mode simulated --view rail-map --map-scope focused
-train-tracker render-map --scope focused --route Airport --route Ferny \
+train-tracker gui --mode simulated --view rail-map --map-scope route
+train-tracker render-map --scope route --route Airport --route Ferny \
   --width 128 --height 64 --output output/rail-led.png
 ```
 
@@ -87,6 +113,10 @@ only the stations or shapes that need curating:
   "stations": {
     "place_twgsta": [120.0, 80.0]
   },
+  "system_stations": {
+    "place_twgsta": [35, 45],
+    "place_romsta": [58, 34]
+  },
   "shapes": {
     "example_shape_id": [[120.0, 80.0], [180.0, 80.0], [240.0, 130.0]]
   },
@@ -113,7 +143,8 @@ only the stations or shapes that need curating:
 }
 ```
 
-The top-level `stations` and `shapes` keys customize Full Network. CBD station overrides accept a
+`system_stations` contains optional logical 128×64 coordinates for System View; missing stations
+continue to use the automatic layout. The top-level `stations` and `shapes` keys customize legacy Full Network. CBD station overrides accept a
 station ID or normalized station name. Track offsets and route geometry use canonical map route IDs.
 Unknown IDs are ignored. When the file is empty or missing, automatic geometry is used.
 `rail_routes` points are logical focused-map coordinates and may be keyed by canonical route ID or
@@ -127,6 +158,7 @@ GTFS-derived route name.
 - Scheduled estimate: hollow/dithered route-coloured train sprite.
 - Stale GPS: dimmed train sprite.
 - Selected train: an additional contrasting one-pixel halo.
+- Dense cluster: a stable count marker when more than four trains share a tiny area.
 
 Scheduled train movement is an estimate derived from stop times and is not a physical observation.
 

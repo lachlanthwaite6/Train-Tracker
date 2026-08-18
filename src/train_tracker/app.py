@@ -8,7 +8,7 @@ from train_tracker.bus_map.presenter import BusMapPresenter
 from train_tracker.bus_map.repository import BusNetworkRepository
 from train_tracker.clock import SimulatedClock
 from train_tracker.config import AppConfig
-from train_tracker.map.models import MapScope
+from train_tracker.map.models import normalize_map_scope
 from train_tracker.map.network_repository import RailNetworkRepository
 from train_tracker.map.presenter import MapPresenter
 from train_tracker.outputs.desktop_gui import DesktopSimulator
@@ -110,6 +110,10 @@ def run_gui(
         focused_route_coverage=config.map.focused_route_coverage,
         focused_track_spacing=config.map.focused_track_spacing,
         focused_station_spacing=config.map.focused_station_spacing,
+        system_screen_coverage=config.map.system_screen_coverage,
+        route_lane_spacing=config.map.route_lane_spacing,
+        train_collision_spacing=config.map.train_collision_spacing,
+        default_station_id=config.map.default_station_id,
     )
     bus_repository = BusNetworkRepository(database) if database.exists() else None
     bus_map_presenter = (
@@ -140,7 +144,7 @@ def run_gui(
         map_presenter=map_presenter,
         map_config=config.map,
         default_view=view or config.map.default_view,
-        default_map_scope=MapScope(map_scope or config.map.default_scope),
+        default_map_scope=normalize_map_scope(map_scope or config.map.default_scope),
         bus_map_presenter=bus_map_presenter,
         bus_map_config=config.bus_map,
     )

@@ -22,6 +22,7 @@ from train_tracker.map.network_repository import RailNetworkRepository
 from train_tracker.map.presenter import MapPresenter
 from train_tracker.map.projection import MapViewport
 from train_tracker.map.renderer import MapRenderOptions, NetworkMapRenderer
+from train_tracker.map.system import system_viewport
 from train_tracker.outputs.base import OutputContext
 from train_tracker.outputs.diagnostics import DiagnosticPattern, render_diagnostic
 from train_tracker.outputs.image_file import ImageFileOutput
@@ -40,7 +41,11 @@ def _parser() -> argparse.ArgumentParser:
     gui.add_argument("--mode", choices=("simulated", "replay", "live"), default=None)
     gui.add_argument("--replay", type=Path)
     gui.add_argument("--view", choices=("departures", "map", "rail-map", "bus-map"), default=None)
-    gui.add_argument("--map-scope", choices=("focused", "cbd", "full"), default=None)
+    gui.add_argument(
+        "--map-scope",
+        choices=("system", "route", "focused", "cbd", "full"),
+        default=None,
+    )
     gui.add_argument("--rail-routes", default=None, help="Comma-separated GTFS rail routes")
     gui.add_argument("--rail-direction", choices=("inbound", "outbound", "both"), default=None)
     gui.add_argument("--bus-route", default=None)
@@ -60,7 +65,9 @@ def _parser() -> argparse.ArgumentParser:
     render_map.add_argument("--database", type=Path, default=None)
     render_map.add_argument("--width", type=int, default=1200)
     render_map.add_argument("--height", type=int, default=800)
-    render_map.add_argument("--scope", choices=("focused", "cbd", "full"), default=None)
+    render_map.add_argument(
+        "--scope", choices=("system", "route", "focused", "cbd", "full"), default=None
+    )
     render_map.add_argument("--route", action="append", default=[])
     render_map.add_argument("--routes", default=None, help="Comma-separated rail routes")
     render_map.add_argument("--direction", choices=("inbound", "outbound", "both"), default=None)
@@ -86,7 +93,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     recorder.add_argument(
         "--view",
-        choices=("departures", "rail-map", "bus-map", "screen-switching"),
+        choices=(
+            "departures",
+            "rail-map",
+            "rail-system-map",
+            "rail-route-focus",
+            "bus-map",
+            "screen-switching",
+        ),
         required=True,
     )
     recorder.add_argument("--duration", type=float, default=12)
@@ -193,6 +207,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 focused_route_coverage=config.map.focused_route_coverage,
                 focused_track_spacing=config.map.focused_track_spacing,
                 focused_station_spacing=config.map.focused_station_spacing,
+                system_screen_coverage=config.map.system_screen_coverage,
+                route_lane_spacing=config.map.route_lane_spacing,
+                train_collision_spacing=config.map.train_collision_spacing,
+                default_station_id=config.map.default_station_id,
             )
             snapshot = None
             live_provider = None
@@ -217,6 +235,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 selected_train_id=args.select_train,
                 train_sprite_size=config.map.rail_sprite_size,
                 show_direction_animation=config.map.show_direction_animation,
+                show_major_labels=config.map.show_major_station_labels,
+                show_minor_labels=config.map.show_minor_station_labels,
+                max_led_labels=config.map.max_led_labels,
+                compact_legend=config.map.compact_legend,
             )
             if scene.scope == MapScope.FOCUSED:
                 if args.width < 128 or args.height < 64:
@@ -229,6 +251,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     logical
                     if (args.width, args.height) == (128, 64)
                     else logical.resize((args.width, args.height), Image.Resampling.NEAREST)
+                )
+            elif scene.scope == MapScope.SYSTEM:
+                viewport = system_viewport(args.width, args.height)
+                frame = NetworkMapRenderer().render(
+                    scene,
+                    (args.width, args.height),
+                    viewport=viewport,
+                    options=render_options,
                 )
             else:
                 compact = args.width <= 160 or args.height <= 80

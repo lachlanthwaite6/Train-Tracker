@@ -45,10 +45,12 @@ class Hub75Config:
 @dataclass(slots=True)
 class MapConfig:
     default_view: str = "network"
-    default_scope: str = "focused"
+    default_scope: str = "system"
     default_station_id: str = "place_twgsta"
     rail_only: bool = True
     show_station_labels: bool = True
+    show_major_station_labels: bool = True
+    show_minor_station_labels: bool = False
     show_scheduled_estimates: bool = True
     live_position_stale_seconds: float = 90.0
     live_position_expiry_seconds: float = 300.0
@@ -57,6 +59,11 @@ class MapConfig:
     background_color: str = "#080a0d"
     layout_file: str = ""
     show_compass: bool = False
+    system_screen_coverage: float = 0.82
+    route_lane_spacing: float = 2.0
+    train_collision_spacing: float = 2.0
+    max_led_labels: int = 10
+    compact_legend: bool = True
     cbd_station_names: tuple[str, ...] = (
         "Bowen Hills",
         "Fortitude Valley",
@@ -79,15 +86,15 @@ class MapConfig:
     focused_route_coverage: float = 0.70
     focused_track_spacing: float = 4.0
     focused_station_spacing: float = 8.0
-    rail_sprite_size: str = "6x4"
+    rail_sprite_size: str = "5x3"
     show_direction_animation: bool = True
     preview_fps: int = 30
 
     def __post_init__(self) -> None:
         if self.default_view not in {"network", "map", "rail-map", "departures", "bus-map"}:
             raise ValueError("map.default_view must be network, rail-map, departures or bus-map")
-        if self.default_scope not in {"focused", "cbd", "full"}:
-            raise ValueError("map.default_scope must be 'focused', 'cbd' or 'full'")
+        if self.default_scope not in {"system", "route", "focused", "cbd", "full"}:
+            raise ValueError("map.default_scope must be 'system' or 'route'")
         if self.interpolation_fps < 1 or self.interpolation_fps > 120:
             raise ValueError("map.interpolation_fps must be between 1 and 120")
         if self.live_position_stale_seconds <= 0:
@@ -96,6 +103,14 @@ class MapConfig:
             raise ValueError("map live position expiry must not be shorter than stale time")
         if self.padding < 0:
             raise ValueError("map.padding must be non-negative")
+        if not 0.80 <= self.system_screen_coverage <= 0.95:
+            raise ValueError("map.system_screen_coverage must be between 0.80 and 0.95")
+        if self.route_lane_spacing < 1 or self.route_lane_spacing > 4:
+            raise ValueError("map.route_lane_spacing must be between 1 and 4")
+        if self.train_collision_spacing < 1 or self.train_collision_spacing > 6:
+            raise ValueError("map.train_collision_spacing must be between 1 and 6")
+        if self.max_led_labels < 1 or self.max_led_labels > 16:
+            raise ValueError("map.max_led_labels must be between 1 and 16")
         if not self.cbd_station_names:
             raise ValueError("map.cbd_station_names must not be empty")
         if self.cbd_track_spacing <= 0 or self.cbd_station_spacing <= 0:

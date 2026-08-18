@@ -46,6 +46,7 @@ class RailRoute:
     route_type: int
     shape_ids: tuple[str, ...]
     station_ids: tuple[str, ...]
+    source_route_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,7 @@ class RailTrip:
     direction_id: int | None
     shape_id: str | None
     stops: tuple[StopTimeEvent, ...]
+    source_route_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,9 +93,22 @@ class TrainPositionSource(StrEnum):
 
 
 class MapScope(StrEnum):
+    SYSTEM = "system"
     FOCUSED = "focused"
     CBD = "cbd"
     FULL = "full"
+
+
+def normalize_map_scope(value: str | MapScope) -> MapScope:
+    """Accept the public scope names while preserving legacy configuration values."""
+    if isinstance(value, MapScope):
+        return value
+    aliases = {
+        "route": MapScope.FOCUSED,
+        "route-focus": MapScope.FOCUSED,
+        "network": MapScope.SYSTEM,
+    }
+    return aliases[value] if value in aliases else MapScope(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +130,7 @@ class TrainMarker:
     stale: bool = False
     raw_latitude: float | None = None
     raw_longitude: float | None = None
+    cluster_count: int = 1
 
 
 @dataclass(frozen=True, slots=True)
