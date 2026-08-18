@@ -48,6 +48,7 @@ def test_network_filters_bus_and_aggregates_platforms(rail_gtfs_zip: Path, tmp_p
     assert network.stations["place_cen"].interchange
     assert set(network.stations["place_cen"].route_ids) == {"R_BLUE", "R_GOLD"}
     assert network.routes["R_BLUE"].color == "#3B82F6"
+    assert network.routes["R_BLUE"].source_route_ids == ("R_BLUE",)
 
 
 def test_shapes_both_directions_and_active_trips(rail_gtfs_zip: Path, tmp_path: Path) -> None:

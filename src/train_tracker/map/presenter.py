@@ -21,8 +21,10 @@ from train_tracker.map.models import (
     RailRoute,
     RailTrip,
     UpcomingCall,
+    normalize_map_scope,
 )
 from train_tracker.map.network_repository import RailNetworkRepository
+from train_tracker.map.system import build_system_view, resolve_system_marker_overlaps
 from train_tracker.map.vehicle_tracker import VehicleTracker
 from train_tracker.models import FeedHealth, ProviderSnapshot
 
@@ -38,7 +40,7 @@ class MapPresenter:
         layout_file: str = "",
         stale_seconds: float = 90,
         expiry_seconds: float = 300,
-        scope: str | MapScope = MapScope.FULL,
+        scope: str | MapScope = MapScope.SYSTEM,
         cbd_station_names: tuple[str, ...] = (),
         cbd_station_spacing: float = 70.0,
         cbd_track_spacing: float = 8.0,
@@ -48,12 +50,16 @@ class MapPresenter:
         focused_route_coverage: float = 0.70,
         focused_track_spacing: float = 4.0,
         focused_station_spacing: float = 8.0,
+        system_screen_coverage: float = 0.82,
+        route_lane_spacing: float = 2.0,
+        train_collision_spacing: float = 2.0,
+        default_station_id: str = "place_twgsta",
     ) -> None:
         self.repository = repository
         self.mode = mode
         self.layout_file = layout_file
         self.tracker = VehicleTracker(stale_seconds=stale_seconds, expiry_seconds=expiry_seconds)
-        self.scope = MapScope(scope)
+        self.scope = normalize_map_scope(scope)
         self.cbd_station_names = cbd_station_names
         self.cbd_station_spacing = cbd_station_spacing
         self.cbd_track_spacing = cbd_track_spacing
@@ -63,6 +69,10 @@ class MapPresenter:
         self.focused_route_coverage = focused_route_coverage
         self.focused_track_spacing = focused_track_spacing
         self.focused_station_spacing = focused_station_spacing
+        self.system_screen_coverage = system_screen_coverage
+        self.route_lane_spacing = route_lane_spacing
+        self.train_collision_spacing = train_collision_spacing
+        self.default_station_id = default_station_id
         self._network: RailNetwork | None = None
         self._demo_date: date | None = None
         self._demo_trips: tuple[RailTrip, ...] = ()
@@ -70,7 +80,10 @@ class MapPresenter:
         self._cbd_focus: CbdFocus | None = None
 
     def set_scope(self, scope: str | MapScope) -> None:
-        self.scope = MapScope(scope)
+        normalized = normalize_map_scope(scope)
+        if normalized != self.scope:
+            self.scope = normalized
+            self._cbd_cache_key = None
 
     def set_focused_routes(self, routes: tuple[str, ...]) -> None:
         cleaned = tuple(item for item in routes if item)[:2]
@@ -125,7 +138,7 @@ class MapPresenter:
             )
             for marker in full_live
         )
-        if self.scope in {MapScope.FOCUSED, MapScope.CBD}:
+        if self.scope in {MapScope.SYSTEM, MapScope.FOCUSED, MapScope.CBD}:
             cache_key = (
                 id(full_network),
                 now.date(),
@@ -139,11 +152,23 @@ class MapPresenter:
                 self.focused_route_coverage,
                 self.focused_track_spacing,
                 self.focused_station_spacing,
+                self.system_screen_coverage,
+                self.route_lane_spacing,
+                self.default_station_id,
                 self.layout_file,
                 tuple(sorted(cancelled)),
             )
             if self._cbd_focus is None or cache_key != self._cbd_cache_key:
-                if self.scope == MapScope.FOCUSED:
+                if self.scope == MapScope.SYSTEM:
+                    self._cbd_focus = build_system_view(
+                        full_network,
+                        full_trips,
+                        screen_coverage=self.system_screen_coverage,
+                        route_lane_spacing=self.route_lane_spacing,
+                        default_station_id=self.default_station_id,
+                        layout_file=self.layout_file,
+                    )
+                elif self.scope == MapScope.FOCUSED:
                     self._cbd_focus = build_route_focus(
                         full_network,
                         full_trips,
@@ -211,7 +236,14 @@ class MapPresenter:
             if marker.trip_id not in live_trip_ids
         )
         markers = tuple((*live, *estimates))
-        if self.scope in {MapScope.FOCUSED, MapScope.CBD}:
+        if self.scope == MapScope.SYSTEM:
+            markers = resolve_system_marker_overlaps(
+                markers,
+                network,
+                trips,
+                self.train_collision_spacing,
+            )
+        elif self.scope in {MapScope.FOCUSED, MapScope.CBD}:
             spacing = (
                 self.focused_track_spacing
                 if self.scope == MapScope.FOCUSED

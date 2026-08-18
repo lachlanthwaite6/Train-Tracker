@@ -240,6 +240,7 @@ class RailNetworkRepository:
                 int(row["route_type"]),
                 tuple(route_shape_ids[route_id]),
                 tuple(station_sequences[route_id]),
+                tuple(str(item["route_id"]) for item in grouped_rows),
             )
         all_points = [station.position for station in stations.values()]
         all_points.extend(point for shape in shapes.values() for point in shape.points)
@@ -341,6 +342,7 @@ class RailNetworkRepository:
                         int(first["direction_id"]) if first["direction_id"] is not None else None,
                         str(first["shape_id"]) if first["shape_id"] else None,
                         tuple(stops),
+                        str(first["route_id"]),
                     )
                 )
         return tuple(result)

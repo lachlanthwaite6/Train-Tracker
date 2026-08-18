@@ -20,10 +20,12 @@ start_time = "2026-08-18T07:25:00+10:00"
 
 [map]
 default_view = "network"
-default_scope = "focused"
+default_scope = "system"
 default_station_id = "place_twgsta"
 rail_only = true
 show_station_labels = true
+show_major_station_labels = true
+show_minor_station_labels = false
 show_scheduled_estimates = true
 live_position_stale_seconds = 90
 live_position_expiry_seconds = 300
@@ -32,6 +34,11 @@ padding = 40
 background_color = "#080a0d"
 layout_file = ""
 show_compass = false
+system_screen_coverage = 0.82
+route_lane_spacing = 2
+train_collision_spacing = 2
+max_led_labels = 10
+compact_legend = true
 cbd_station_names = [
   "Bowen Hills",
   "Fortitude Valley",
@@ -54,7 +61,7 @@ rail_map_width = 90
 focused_route_coverage = 0.70
 focused_track_spacing = 4
 focused_station_spacing = 8
-rail_sprite_size = "6x4"
+rail_sprite_size = "5x3"
 show_direction_animation = true
 preview_fps = 30
 

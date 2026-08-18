@@ -76,7 +76,7 @@ class MapViewport:
 
     def zoom_at(self, factor: float, screen: Point) -> None:
         before = self.screen_to_world(screen)
-        self.scale = min(max(self.scale * factor, 0.0001), 10.0)
+        self.scale = min(max(self.scale * factor, 0.0001), 100.0)
         after = self.screen_to_world(screen)
         self.center = Point(
             self.center.x + before.x - after.x,

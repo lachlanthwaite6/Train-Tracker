@@ -16,6 +16,7 @@ from train_tracker.map.network_repository import RailNetworkRepository
 from train_tracker.map.presenter import MapPresenter
 from train_tracker.map.projection import MapViewport
 from train_tracker.map.renderer import MapRenderOptions, NetworkMapRenderer
+from train_tracker.map.system import system_viewport
 from train_tracker.models import (
     FeedHealth,
     FeedStatus,
@@ -101,6 +102,7 @@ def _rail_frames(
     times: tuple[datetime, ...],
     routes: tuple[str, ...],
     database: Path | None,
+    scope: MapScope = MapScope.SYSTEM,
 ) -> list[Image.Image]:
     repository = (
         RailNetworkRepository(database) if database is not None and database.exists() else None
@@ -108,7 +110,7 @@ def _rail_frames(
     presenter = MapPresenter(
         repository,
         mode="simulated",
-        scope=MapScope.FOCUSED,
+        scope=scope,
         layout_file=config.map.layout_file,
         focused_routes=routes or config.map.focused_routes,
         rail_direction="both",
@@ -116,6 +118,10 @@ def _rail_frames(
         focused_route_coverage=config.map.focused_route_coverage,
         focused_track_spacing=config.map.focused_track_spacing,
         focused_station_spacing=config.map.focused_station_spacing,
+        system_screen_coverage=config.map.system_screen_coverage,
+        route_lane_spacing=config.map.route_lane_spacing,
+        train_collision_spacing=config.map.train_collision_spacing,
+        default_station_id=config.map.default_station_id,
     )
     renderer = NetworkMapRenderer()
     frames: list[Image.Image] = []
@@ -150,20 +156,29 @@ def _rail_frames(
             if scene.markers and index >= len(times) // 2
             else None
         )
-        viewport = MapViewport.fit(scene.network.bounds, config.map.rail_map_width, 64, 1)
+        logical_width = 128 if scope == MapScope.SYSTEM else config.map.rail_map_width
+        viewport = (
+            system_viewport(logical_width, 64)
+            if scope == MapScope.SYSTEM
+            else MapViewport.fit(scene.network.bounds, logical_width, 64, 1)
+        )
         frames.append(
             renderer.render(
                 scene,
                 (128, 64),
                 viewport=viewport,
                 options=MapRenderOptions(
-                    scope=MapScope.FOCUSED,
-                    reserve_info_panel=True,
+                    scope=scope,
+                    reserve_info_panel=scope == MapScope.FOCUSED,
                     info_panel_width=config.map.train_info_panel_width,
                     selected_train_id=selected,
                     train_sprite_size=config.map.rail_sprite_size,
                     show_direction_animation=config.map.show_direction_animation,
                     animation_frame=index,
+                    show_major_labels=config.map.show_major_station_labels,
+                    show_minor_labels=config.map.show_minor_station_labels,
+                    max_led_labels=config.map.max_led_labels,
+                    compact_legend=config.map.compact_legend,
                 ),
             )
         )
@@ -250,7 +265,10 @@ def _screen_switching_frames(
     third = max(2, len(times) // 3)
     groups: tuple[tuple[str, Callable[[], list[Image.Image]]], ...] = (
         ("DEPARTURES", lambda: _departure_frames(config, times[:third])),
-        ("RAIL MAP", lambda: _rail_frames(config, times[third : third * 2], routes, database)),
+        (
+            "RAIL SYSTEM",
+            lambda: _rail_frames(config, times[third : third * 2], routes, database),
+        ),
         ("BUS MAP", lambda: _bus_frames(config, times[third * 2 :], ("M1",), database)),
     )
     frames: list[Image.Image] = []
@@ -277,8 +295,10 @@ def logical_demo_frames(
     times = _times(start, duration, fps)
     if view == "departures":
         frames = _departure_frames(config, times)
-    elif view == "rail-map":
+    elif view in {"rail-map", "rail-system-map"}:
         frames = _rail_frames(config, times, routes, database)
+    elif view == "rail-route-focus":
+        frames = _rail_frames(config, times, routes, database, MapScope.FOCUSED)
     elif view == "bus-map":
         frames = _bus_frames(config, times, routes, database)
     elif view == "screen-switching":
