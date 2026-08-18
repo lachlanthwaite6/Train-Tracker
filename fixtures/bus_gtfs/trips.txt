@@ -1,0 +1,6 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id,wheelchair_accessible
+M1_TEST,WKD,M1_IN,Demo Roma Street,0,m1_in,1
+M1_TEST,WKD,M1_OUT,Demo Eight Mile Plains,1,m1_out,1
+M1_TEST,WKD,M1_NIGHT,Demo Roma Street,0,m1_in,1
+M2_TEST,WKD,M2_IN,Demo RBWH,0,m2_in,1
+RAIL_TEST,WKD,RAIL_TRIP,Excluded Rail,0,rail_shape,1

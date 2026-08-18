@@ -1,0 +1,18 @@
+stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station,platform_code,wheelchair_boarding
+place_ep,Demo Eight Mile Plains station,-27.5750,153.1000,1,,,1
+EP1,Eight Mile Plains platform,-27.5750,153.1000,0,place_ep,A,1
+place_umg,Demo Upper Mount Gravatt station,-27.5580,153.0830,1,,,1
+UMG1,Upper Mount Gravatt platform,-27.5580,153.0830,0,place_umg,A,1
+place_grf,Demo Griffith University station,-27.5450,153.0660,1,,,1
+GRF1,Griffith University platform,-27.5450,153.0660,0,place_grf,A,1
+place_bur,Demo Buranda station,-27.5000,153.0450,1,,,1
+BUR1,Buranda platform,-27.5000,153.0450,0,place_bur,A,1
+place_cul,Demo Cultural Centre station,-27.4750,153.0180,1,,,1
+CUL1,Cultural Centre platform,-27.4750,153.0180,0,place_cul,A,1
+place_rom,Demo Roma Street station,-27.4660,153.0180,1,,,1
+ROM1,Roma Street platform,-27.4660,153.0180,0,place_rom,A,1
+place_uq,Demo UQ Lakes station,-27.4970,153.0140,1,,,1
+UQ1,UQ Lakes platform,-27.4970,153.0140,0,place_uq,A,1
+place_rbwh,Demo RBWH station,-27.4470,153.0280,1,,,1
+RBW1,RBWH platform,-27.4470,153.0280,0,place_rbwh,A,1
+RAIL1,Excluded rail stop,-27.4700,153.0300,0,,1,1

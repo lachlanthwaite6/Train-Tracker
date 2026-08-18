@@ -1,0 +1,43 @@
+{
+  "station": {"id": "REPLAY-CEN", "name": "Replay Central"},
+  "frames": [
+    {
+      "offset_seconds": 0,
+      "health": "healthy",
+      "message": "Replay: normal operation",
+      "departures": [
+        {"id": "r1", "trip_id": "trip-r1", "route": "BDVL", "destination": "Beenleigh", "scheduled_in_seconds": 240, "platform": "2", "realtime_state": "realtime"},
+        {"id": "r2", "trip_id": "trip-r2", "route": "CLBR", "destination": "Caboolture", "scheduled_in_seconds": 600, "platform": "3", "realtime_state": "realtime"},
+        {"id": "r3", "trip_id": "trip-r3", "route": "GOLD", "destination": "Varsity Lakes", "scheduled_in_seconds": 900, "platform": "1", "realtime_state": "realtime"}
+      ]
+    },
+    {
+      "offset_seconds": 120,
+      "health": "healthy",
+      "message": "Replay: delay injected",
+      "departures": [
+        {"id": "r1", "trip_id": "trip-r1", "route": "BDVL", "destination": "Beenleigh", "scheduled_in_seconds": 120, "delay_seconds": 300, "platform": "2", "realtime_state": "realtime"},
+        {"id": "r2", "trip_id": "trip-r2", "route": "CLBR", "destination": "Caboolture", "scheduled_in_seconds": 480, "platform": "4", "realtime_state": "realtime"}
+      ],
+      "alerts": [{"id": "a1", "header": "Signal fault - expect delays"}]
+    },
+    {
+      "offset_seconds": 240,
+      "health": "stale",
+      "message": "Replay: realtime feed stale",
+      "departures": [
+        {"id": "r2", "trip_id": "trip-r2", "route": "CLBR", "destination": "Caboolture", "scheduled_in_seconds": 360, "platform": "4", "realtime_state": "stale"},
+        {"id": "r3", "trip_id": "trip-r3", "route": "GOLD", "destination": "Varsity Lakes", "scheduled_in_seconds": 660, "platform": "1", "realtime_state": "stale"}
+      ]
+    },
+    {
+      "offset_seconds": 360,
+      "health": "healthy",
+      "message": "Replay: service recovered",
+      "departures": [
+        {"id": "r2", "trip_id": "trip-r2", "route": "CLBR", "destination": "Caboolture", "scheduled_in_seconds": 240, "platform": "4", "realtime_state": "realtime"},
+        {"id": "r3", "trip_id": "trip-r3", "route": "GOLD", "destination": "Varsity Lakes", "scheduled_in_seconds": 540, "platform": "1", "realtime_state": "realtime"}
+      ]
+    }
+  ]
+}

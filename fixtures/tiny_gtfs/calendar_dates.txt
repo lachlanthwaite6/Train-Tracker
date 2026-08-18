@@ -1,0 +1,2 @@
+service_id,date,exception_type
+WKD,20260819,1

@@ -1,0 +1,4 @@
+route_id,route_short_name,route_long_name,route_type,route_color,route_text_color
+R_BLUE,Airport,Demo Airport rail line,2,3B82F6,FFFFFF
+R_GOLD,Cleveland,Demo Cleveland rail line,2,F59E0B,111111
+R_BUS,Bus,Excluded bus route,3,777777,FFFFFF
