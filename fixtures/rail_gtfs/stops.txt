@@ -1,0 +1,12 @@
+stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station,platform_code,wheelchair_boarding
+place_twgsta,Toowong station,-27.4850,152.9920,1,,,1
+TWG1,Toowong platform 1,-27.4851,152.9919,0,place_twgsta,1,1
+TWG2,Toowong platform 2,-27.4849,152.9921,0,place_twgsta,2,1
+place_cen,Central station,-27.4662,153.0260,1,,,1
+CEN1,Central platform 1,-27.4663,153.0259,0,place_cen,1,1
+CEN2,Central platform 2,-27.4661,153.0261,0,place_cen,2,1
+place_air,Demo Airport station,-27.3840,153.1180,1,,,1
+AIR1,Demo Airport platform,-27.3840,153.1180,0,place_air,1,1
+place_clv,Demo Cleveland station,-27.5250,153.2550,1,,,1
+CLV1,Demo Cleveland platform,-27.5250,153.2550,0,place_clv,1,1
+BUS1,Demo bus stop,-27.4700,153.0300,0,,A,1

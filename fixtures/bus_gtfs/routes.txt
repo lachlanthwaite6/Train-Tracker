@@ -1,0 +1,4 @@
+route_id,route_short_name,route_long_name,route_type,route_color,route_text_color
+M1_TEST,M1,Eight Mile Plains - City,3,E463A4,FFFFFF
+M2_TEST,M2,UQ Lakes - RBWH,3,34D399,051018
+RAIL_TEST,Rail,Excluded rail route,2,3B82F6,FFFFFF

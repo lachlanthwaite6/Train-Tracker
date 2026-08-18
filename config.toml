@@ -1,0 +1,97 @@
+[app]
+mode = "simulated"
+station_id = "SIM-CEN"
+live_station_id = "place_twgsta"
+timezone = "Australia/Brisbane"
+refresh_seconds = 5.0
+
+[display]
+width = 128
+height = 64
+scale = 6
+fps = 20
+brightness = 100
+pixel_grid = true
+
+[simulation]
+scenario = "normal"
+speed = 1.0
+start_time = "2026-08-18T07:25:00+10:00"
+
+[map]
+default_view = "network"
+default_scope = "focused"
+default_station_id = "place_twgsta"
+rail_only = true
+show_station_labels = true
+show_scheduled_estimates = true
+live_position_stale_seconds = 90
+live_position_expiry_seconds = 300
+interpolation_fps = 30
+padding = 40
+background_color = "#080a0d"
+layout_file = ""
+show_compass = false
+cbd_station_names = [
+  "Bowen Hills",
+  "Fortitude Valley",
+  "Central",
+  "Roma Street",
+  "Milton",
+  "Toowong",
+  "South Brisbane",
+  "South Bank",
+]
+cbd_track_spacing = 8
+cbd_station_spacing = 70
+show_symbol_legend = true
+reserve_train_info_panel = true
+train_info_panel_width = 38
+auto_cycle_train_seconds = 0
+focused_routes = []
+rail_direction = "both"
+rail_map_width = 90
+focused_route_coverage = 0.70
+focused_track_spacing = 4
+focused_station_spacing = 8
+rail_sprite_size = "6x4"
+show_direction_animation = true
+preview_fps = 30
+
+[bus_map]
+enabled = true
+default_route = "M1"
+direction = "both"
+map_width = 90
+info_panel_width = 38
+route_screen_coverage = 0.70
+lane_spacing = 4
+station_spacing = 12
+show_major_stop_labels = true
+show_direction_animation = true
+bus_sprite_size = "6x4"
+auto_cycle_bus_seconds = 5
+live_position_stale_seconds = 90
+live_position_expiry_seconds = 300
+background_color = "#05080d"
+route_glow = true
+layout_file = ""
+preview_fps = 30
+
+[translink]
+database = "data/translink.sqlite3"
+static_url = "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"
+trip_updates_url = "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"
+vehicle_positions_url = "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"
+alerts_url = "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/Alerts"
+poll_seconds = 15.0
+stale_after_seconds = 90.0
+
+[hub75]
+rows = 64
+cols = 128
+chain_length = 1
+parallel = 1
+brightness = 60
+gpio_slowdown = 2
+hardware_mapping = "regular"
